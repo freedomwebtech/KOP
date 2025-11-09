@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RTSP Live Stream Package Counter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { opacity: 0.9; font-size: 1.1em; }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .video-section {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        #videoCanvas {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            cursor: crosshair;
+            background: #000;
+            min-height: 400px;
+        }
+
+        .live-counts-panel {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            order: -1;
+        }
+
+        .live-counts-panel h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .panel-empty {
+            text-align: center;
+            color: #666;
+            font-size: 0.95em;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+        }
+
+        .card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-warning { background: #ffc107; color: #000; }
+        .btn-yellow { background: #ffd700; color: #000; }
+        .btn-magenta { background: #ff00ff; color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 0.9em;
+            color: #004085;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-active { background: #28a745; animation: pulse 2s infinite; }
+        .status-inactive { background: #dc3545; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .dot-count {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 5px solid;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 12px;
+        }
+
+        .dot-count strong {
+            font-size: 1.15em;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .mode-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .mode-in { background: #d1ecf1; color: #0c5460; }
+        .mode-out { background: #fff3cd; color: #856404; }
+
+        .count-badge {
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        .in-badge { background: #d4edda; color: #155724; }
+        .out-badge { background: #f8d7da; color: #721c24; }
+
+        .truck-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .btn-save, .btn-remove {
+            font-size: 0.85em;
+            padding: 8px 16px;
+            margin-bottom: 0;
+        }
+
+        .btn-save { background: #28a745; color: white; }
+        .btn-remove { background: #dc3545; color: white; }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .line-status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .line-saved { background: #d4edda; color: #155724; border: 2px solid #c3e6cb; }
+        .line-not-saved { background: #fff3cd; color: #856404; border: 2px solid #ffeeba; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📡 RTSP Live Stream Package Counter</h1>
+            <p>Real-time CCTV Camera Monitoring | Line 2 → Line 1 = OUT | Line 1 → Line 2 = IN</p>
+        </div>
+
+        <div class="main-content">
+            <div class="video-section">
+                <div class="live-counts-panel">
+                    <h3>📊 Live Counts</h3>
+                    <div class="counts-display" id="liveCountsDisplay">
+                        <p class="panel-empty">No vehicles registered yet</p>
+                    </div>
+                </div>
+
+                <div class="alert alert-info" id="statusAlert">
+                    <span class="status-indicator status-inactive" id="statusIndicator"></span>
+                    <span id="statusText">Enter RTSP URL and click Connect</span>
+                </div>
+                
+                <img id="videoCanvas" src="" alt="RTSP Live Stream" />
+            </div>
+
+            <div class="controls-section">
+                <div class="card">
+                    <h3>📡 RTSP Stream</h3>
+                    <div class="input-group">
+                        <label>RTSP URL:</label>
+                        <input type="text" id="rtspUrl" placeholder="rtsp://username:password@ip:port/stream">
+                    </div>
+                    <button class="btn btn-success" id="startBtn" onclick="startStream()">📡 Connect Stream</button>
+                    <button class="btn btn-danger" id="stopBtn" onclick="stopStream()" disabled>⏹️ Stop Stream</button>
+                </div>
+
+                <div class="card">
+                    <h3>📏 Line Management</h3>
+                    <div id="lineStatusDisplay" class="line-status line-not-saved">
+                        ⚠️ No lines drawn yet
+                    </div>
+                    <div class="button-grid">
+                        <button class="btn btn-yellow" onclick="startLineDrawing(1)">✏️ Line 1 (Yellow)</button>
+                        <button class="btn btn-magenta" onclick="startLineDrawing(2)">✏️ Line 2 (Magenta)</button>
+                    </div>
+                    <button class="btn btn-danger" onclick="deleteLines()" id="deleteLinesBtn" disabled>🗑️ Delete Lines</button>
+                </div>
+
+                <div class="card">
+                    <h3>🚗 Add Vehicle</h3>
+                    <div class="input-group">
+                        <label>Number Plate:</label>
+                        <input type="text" id="numberPlate" placeholder="MH12AB1234" style="text-transform: uppercase;">
+                    </div>
+                    <div class="input-group">
+                        <label>Count Mode:</label>
+                        <select id="countMode">
+                            <option value="IN">Count IN (Line 1 → Line 2)</option>
+                            <option value="OUT">Count OUT (Line 2 → Line 1)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" onclick="enableDotCreation()">➕ Add Dot</button>
+                </div>
+
+                <div class="card">
+                    <h3>⚙️ Actions</h3>
+                    <button class="btn btn-warning" onclick="resetAll()">🔄 Reset Dots</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let videoRunning = false;
+        let drawingMode = false;
+        let currentLineNumber = 1;
+        let line1Drawn = false;
+        let line2Drawn = false;
+
+        window.onload = function() {
+            checkLineStatus();
+        };
+
+        function checkLineStatus() {
+            fetch('/get_line_status')
+            .then(response => response.json())
+            .then(data => {
+                line1Drawn = data.line_one_drawn;
+                line2Drawn = data.line_two_drawn;
+                updateLineStatusDisplay();
+            });
+        }
+
+        function updateLineStatusDisplay() {
+            const display = document.getElementById('lineStatusDisplay');
+            const deleteLinesBtn = document.getElementById('deleteLinesBtn');
+            
+            if (line1Drawn && line2Drawn) {
+                display.className = 'line-status line-saved';
+                display.innerHTML = '✅ Both lines saved - Ready to count!';
+                deleteLinesBtn.disabled = false;
+            } else if (line1Drawn || line2Drawn) {
+                display.className = 'line-status line-not-saved';
+                display.innerHTML = `⚠️ Only ${line1Drawn ? 'Line 1' : 'Line 2'} drawn`;
+                deleteLinesBtn.disabled = false;
+            } else {
+                display.className = 'line-status line-not-saved';
+                display.innerHTML = '⚠️ No lines drawn yet';
+                deleteLinesBtn.disabled = true;
+            }
+        }
+
+        function startStream() {
+            const rtspUrl = document.getElementById('rtspUrl').value.trim();
+            
+            if (!rtspUrl) {
+                alert('⚠️ Please enter RTSP URL!');
+                return;
+            }
+            
+            if (!rtspUrl.startsWith('rtsp://')) {
+                alert('⚠️ URL must start with rtsp://');
+                return;
+            }
+            
+            updateStatus(true, '📡 Connecting...');
+            
+            fetch('/start_stream', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({rtsp_url: rtspUrl})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    videoRunning = true;
+                    document.getElementById('videoCanvas').src = '/video_feed?' + new Date().getTime();
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                    updateStatus(true, '✅ Stream active');
+                    startCountUpdate();
+                } else {
+                    alert('❌ Connection Failed!\n\n' + data.message);
+                    updateStatus(false, '❌ Connection failed');
+                }
+            })
+            .catch(error => {
+                alert('❌ Error: ' + error);
+                updateStatus(false, '❌ Error');
+            });
+        }
+
+        function stopStream() {
+            if (confirm('Stop RTSP stream?')) {
+                fetch('/stop_stream', {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    videoRunning = false;
+                    document.getElementById('videoCanvas').src = '';
+                    document.getElementById('startBtn').disabled = false;
+                    document.getElementById('stopBtn').disabled = true;
+                    updateStatus(false, 'Stream stopped');
+                });
+            }
+        }
+
+        function updateStatus(active, text) {
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            statusText.textContent = text;
+            indicator.className = active ? 'status-indicator status-active' : 'status-indicator status-inactive';
+        }
+
+        function enableDotCreation() {
+            const numberPlate = document.getElementById('numberPlate').value.trim().toUpperCase();
+            
+            if (!numberPlate) {
+                alert('Please enter a number plate!');
+                return;
+            }
+            
+            drawingMode = 'dot';
+            const mode = document.getElementById('countMode').value;
+            updateStatus(true, `Click on video to place ${mode} dot for ${numberPlate}`);
+        }
+
+        document.getElementById('videoCanvas').addEventListener('click', function(e) {
+            if (!videoRunning) return;
+            
+            const rect = this.getBoundingClientRect();
+            const scaleX = 1020 / rect.width;
+            const scaleY = 600 / rect.height;
+            const x = Math.round((e.clientX - rect.left) * scaleX);
+            const y = Math.round((e.clientY - rect.top) * scaleY);
+
+            if (drawingMode === 'dot') {
+                const numberPlate = document.getElementById('numberPlate').value.trim().toUpperCase();
+                const mode = document.getElementById('countMode').value;
+                createDot(x, y, numberPlate, mode);
+                drawingMode = false;
+            } else if (drawingMode === 'line') {
+                addLinePoint(x, y);
+            }
+        });
+
+        function createDot(x, y, numberPlate, mode) {
+            fetch('/create_dot', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({x: x, y: y, numberplate: numberPlate, mode: mode})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    updateStatus(true, `✅ ${data.numberplate} created`);
+                    document.getElementById('numberPlate').value = '';
+                    updateCounts();
+                } else {
+                    alert(data.message);
+                }
+            });
+        }
+
+        function startLineDrawing(lineNumber) {
+            currentLineNumber = lineNumber;
+            fetch('/start_line_drawing', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({line_number: lineNumber})
+            })
+            .then(response => response.json())
+            .then(data => {
+                drawingMode = 'line';
+                const color = lineNumber === 1 ? 'Yellow' : 'Magenta';
+                updateStatus(true, `Drawing Line ${lineNumber} (${color}) - Click 2 points`);
+            });
+        }
+
+        function addLinePoint(x, y) {
+            fetch('/add_line_point', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({x: x, y: y, line_number: currentLineNumber})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'complete') {
+                    drawingMode = false;
+                    if (currentLineNumber === 1) line1Drawn = true;
+                    else line2Drawn = true;
+                    updateLineStatusDisplay();
+                    updateStatus(true, `✅ Line ${currentLineNumber} drawn`);
+                } else {
+                    updateStatus(true, `Point ${data.points}/2 added`);
+                }
+            });
+        }
+
+        function deleteLines() {
+            if (confirm('Delete both lines?')) {
+                fetch('/delete_lines', {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    line1Drawn = false;
+                    line2Drawn = false;
+                    updateLineStatusDisplay();
+                    updateStatus(true, '🗑️ Lines deleted');
+                });
+            }
+        }
+
+        function resetAll() {
+            if (confirm('Reset all dots?')) {
+                fetch('/reset', {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    updateStatus(true, 'Dots reset');
+                    updateCounts();
+                });
+            }
+        }
+
+        function finishAndSave(dotId, numberplate) {
+            if (confirm(`Save ${numberplate} to CSV?`)) {
+                fetch('/finish_and_save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({dot_id: dotId})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus(true, `✅ ${numberplate} saved`);
+                        updateCounts();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+            }
+        }
+
+        function removeTruck(dotId, numberplate) {
+            if (confirm(`Remove ${numberplate} without saving?`)) {
+                fetch('/remove_truck', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({dot_id: dotId})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        updateStatus(true, `🗑️ ${numberplate} removed`);
+                        updateCounts();
+                    }
+                });
+            }
+        }
+
+        function updateCounts() {
+            fetch('/get_counts')
+            .then(response => response.json())
+            .then(data => {
+                const display = document.getElementById('liveCountsDisplay');
+                if (Object.keys(data).length === 0) {
+                    display.innerHTML = '<p class="panel-empty">No vehicles registered yet</p>';
+                    return;
+                }
+
+                display.innerHTML = '';
+                for (const [dotId, counts] of Object.entries(data)) {
+                    const color = `hsl(${dotId * 137.5}, 70%, 50%)`;
+                    const modeClass = counts.mode === 'IN' ? 'mode-in' : 'mode-out';
+                    
+                    const div = document.createElement('div');
+                    div.className = 'dot-count';
+                    div.style.borderLeftColor = color;
+                    
+                    let countDisplay = counts.mode === 'IN' 
+                        ? `<span class="count-badge in-badge">IN: ${counts.IN}</span>`
+                        : `<span class="count-badge out-badge">OUT: ${counts.OUT}</span>`;
+                    
+                    div.innerHTML = `
+                        <strong>
+                            🚛 ${counts.numberplate}
+                            <span class="mode-badge ${modeClass}">Count ${counts.mode}</span>
+                        </strong>
+                        <div>${countDisplay}</div>
+                        <div class="truck-actions">
+                            <button class="btn btn-save" onclick="finishAndSave(${dotId}, '${counts.numberplate}')">💾 Save</button>
+                            <button class="btn btn-remove" onclick="removeTruck(${dotId}, '${counts.numberplate}')">🗑️ Remove</button>
+                        </div>
+                    `;
+                    display.appendChild(div);
+                }
+            });
+        }
+
+        function startCountUpdate() {
+            setInterval(() => {
+                if (videoRunning) updateCounts();
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
